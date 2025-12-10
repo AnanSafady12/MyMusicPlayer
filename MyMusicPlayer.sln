@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36623.8 d17.14
+VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyMusicPlayer", "MyMusicPlayer\MyMusicPlayer.csproj", "{5931BB41-0195-4A8A-A193-1E70423FC957}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DesignPattern", "DesignPattern\DesignPattern.csproj", "{E462814F-A074-4D58-BF77-B3548C3468EB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{5931BB41-0195-4A8A-A193-1E70423FC957}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5931BB41-0195-4A8A-A193-1E70423FC957}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5931BB41-0195-4A8A-A193-1E70423FC957}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E462814F-A074-4D58-BF77-B3548C3468EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E462814F-A074-4D58-BF77-B3548C3468EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E462814F-A074-4D58-BF77-B3548C3468EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E462814F-A074-4D58-BF77-B3548C3468EB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

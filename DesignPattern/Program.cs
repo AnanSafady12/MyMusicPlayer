@@ -33,6 +33,12 @@ namespace DesignPattern
             //client.ClientCode2(tree, leaf);
 
 
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("Anan Safady 324914225 ---> ");
+            Console.ResetColor();
+
+           
             // Create a tree structure 
             CompositeElement root = new CompositeElement("Picture");
             root.Add(new PrimitiveElement("Red Line"));

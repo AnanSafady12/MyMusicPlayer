@@ -5,8 +5,17 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Windows.Controls;
+using System.Threading;
+using System.Threading.Tasks;
+using MyMusicPlayer.Services;
+using MyMusicPlayer.Models;
+using System.Windows.Media.Imaging;
+using System.Net.Http;
+
 
 namespace MyMusicPlayer
 {
@@ -19,9 +28,20 @@ namespace MyMusicPlayer
         private bool isDragging = false;
         private const string FILE_NAME = "library.json";
 
+        private readonly ITunesService _itunesService = new ITunesService();
+        private CancellationTokenSource? _itunesCts;
+        private static readonly HttpClient _http = new HttpClient();
+
+
         public MainWindow()
         {
             InitializeComponent();
+
+            SetDefaultCover();
+            txtArtist.Text = "-";
+            txtAlbum.Text = "-";
+            txtStatus.Text = imgCover.Source == null ? "Cover NOT loaded" : "Cover loaded";
+
 
             timer.Interval = TimeSpan.FromMilliseconds(500);
             timer.Tick += Timer_Tick;
@@ -36,16 +56,25 @@ namespace MyMusicPlayer
 
         private void BtnPlay_Click(object sender, RoutedEventArgs e)
         {
-            //if(sender is Button btn)
-            //{
-            //    btn.Background=Brushes.LightGreen;
-            //}
+            // If a song is selected, always open and play it
+            if (lstLibrary.SelectedItem is MusicTrack track)
+            {
+                mediaPlayer.Open(new Uri(track.FilePath));
+                mediaPlayer.Play();
+                timer.Start();
+
+                txtCurrentSong.Text = track.Title;
+                txtStatus.Text = "Playing";
+
+                _ = FetchAndShowITunesMetadataAsync(track);
+                return;
+            }
 
 
-
+            // If nothing is selected, just try to resume (optional fallback)
             mediaPlayer.Play();
             timer.Start();
-            txtStatus.Text = "playing";
+            txtStatus.Text = "Playing";
         }
 
         private void BtnPause_Click(object sender, RoutedEventArgs e)
@@ -61,6 +90,8 @@ namespace MyMusicPlayer
             sliderProgress.Value = 0;
             txtStatus.Text = "Stopped";
         }
+
+
 
         private void SliderVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
@@ -133,10 +164,15 @@ namespace MyMusicPlayer
                 mediaPlayer.Open(new Uri(track.FilePath));
                 mediaPlayer.Play();
                 timer.Start();
+
                 txtCurrentSong.Text = track.Title;
                 txtStatus.Text = "Playing";
+
+                // Start iTunes API call in parallel (async, non-blocking)
+                _ = FetchAndShowITunesMetadataAsync(track);
             }
         }
+
         private void UpdateLibraryUI()
         {
             lstLibrary.ItemsSource = null;
@@ -184,5 +220,127 @@ namespace MyMusicPlayer
             UpdateLibraryUI();
             SaveLibrary();
         }
+        private void LstLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (lstLibrary.SelectedItem is not MusicTrack track)
+                return;
+
+            txtCurrentSong.Text = System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+            txtFilePath.Text = track.FilePath;
+
+            txtArtist.Text = "-";
+            txtAlbum.Text = "-";
+            SetDefaultCover();
+        }
+
+        private void SetDefaultCover()
+        {
+            try
+            {
+                imgCover.Source = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri("pack://application:,,,/assets/default_cover.jpg", UriKind.Absolute)
+                );
+
+                txtStatus.Text = "Cover loaded (resource)";
+            }
+            catch (Exception ex)
+            {
+                imgCover.Source = null;
+                txtStatus.Text = "Cover load failed: " + ex.Message;
+            }
+        }
+
+        private string BuildSearchQueryFromFile(MusicTrack track)
+        {
+           
+            string name = System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+            name = name.Replace("-", " ").Trim();
+            return name;
+        }
+
+        private async Task FetchAndShowITunesMetadataAsync(MusicTrack track)
+        {
+            // Cancel previous request (avoid unnecessary calls)
+            _itunesCts?.Cancel();
+            _itunesCts = new CancellationTokenSource();
+            var ct = _itunesCts.Token;
+
+            string query = BuildSearchQueryFromFile(track);
+
+            try
+            {
+                txtStatus.Text = "Searching iTunes...";
+
+                ITunesTrack? result = await _itunesService.SearchBestMatchAsync(query, ct);
+
+                // If cancelled, do nothing
+                ct.ThrowIfCancellationRequested();
+
+                if (result == null)
+                {
+                    // If no result: show local fallback (as required)
+                    txtArtist.Text = "-";
+                    txtAlbum.Text = "-";
+                    txtCurrentSong.Text = System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+                    txtFilePath.Text = track.FilePath;
+                    SetDefaultCover();
+                    txtStatus.Text = "No iTunes match (showing local info)";
+                    return;
+                }
+
+                // Update UI with API info
+                txtCurrentSong.Text = result.TrackName ?? System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+                txtArtist.Text = result.ArtistName ?? "-";
+                txtAlbum.Text = result.CollectionName ?? "-";
+                txtFilePath.Text = track.FilePath;
+
+                // Load album cover from URL (if exists)
+                if (!string.IsNullOrWhiteSpace(result.ArtworkUrl100))
+                {
+                    string coverUrl = result.ArtworkUrl100.Replace("100x100", "600x600"); // higher res
+
+                    byte[] bytes = await _http.GetByteArrayAsync(coverUrl, ct);
+
+                    var bmp = new BitmapImage();
+                    using (var ms = new MemoryStream(bytes))
+                    {
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                    }
+
+                    imgCover.Source = bmp;
+                    txtStatus.Text = "Cover loaded (iTunes)";
+                }
+                else
+                {
+                    SetDefaultCover();
+                    txtStatus.Text = "No cover in iTunes (default used)";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when switching songs quickly — do nothing
+            }
+            catch (Exception ex)
+            {
+                // Required fallback on error: show local filename + full path
+                txtCurrentSong.Text = System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+                txtFilePath.Text = track.FilePath;
+                txtArtist.Text = "-";
+                txtAlbum.Text = "-";
+                SetDefaultCover();
+                txtStatus.Text = "iTunes error: " + ex.Message;
+            }
+        }
+
+
+
+
+
+
+
     }
 }

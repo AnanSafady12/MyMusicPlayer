@@ -80,6 +80,8 @@
                 <Button Content="Remove" Click="BtnRemove_Click" Margin="5"/>
                 <Button Name="Settings" Content="Settings" Click="Settings_Click" Width="80" Margin="2"
                         Background="#555" Foreground="White"/>
+                <Button Content="Edit" Click="BtnEdit_Click" />
+
             </StackPanel>
         </Grid>
     </Grid>
